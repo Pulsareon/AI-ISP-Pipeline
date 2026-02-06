@@ -62,5 +62,17 @@ Results are saved in `results/` as side-by-side comparisons (Original Left vs AI
 **Validation Metric:**
 - Laplacian Variance Improvement: **> +3000%** (on blurred synthetic input)
 
+## 🔧 Modular Architecture (Ref. openISP)
+
+In response to Issue #1, we have refactored the pipeline into a modular design.
+
+- **`pipeline_v2.py`**: A clean, modular ISP pipeline (BLC -> Demosaic -> CCM -> Gamma -> AI-NR).
+- **`scripts/model.py`**: Added **DnCNN** implementation for state-of-the-art AI Denoising.
+
+Run the modular pipeline:
+```bash
+python pipeline_v2.py
+```
+
 ## 📜 License
 MIT

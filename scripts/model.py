@@ -133,6 +133,45 @@ class TinyISPNetESPCN(nn.Module):
         return x
 
 
+class DnCNN(nn.Module):
+    """
+    DnCNN (Beyond a Gaussian Denoiser)
+    输入: 1通道 (Gray/Bayer) 或 3通道 (RGB)
+    深度: 17层
+    结构: Conv + BN + ReLU
+    输出: 残差 (噪声), 最终输出 = 输入 - 噪声
+    """
+    def __init__(self, in_channels=1, depth=17, num_features=64):
+        super(DnCNN, self).__init__()
+        
+        layers = []
+        # 第一层: Conv + ReLU
+        layers.append(nn.Conv2d(in_channels, num_features, kernel_size=3, padding=1, bias=False))
+        layers.append(nn.ReLU(inplace=True))
+        
+        # 中间层: Conv + BN + ReLU (15层)
+        for _ in range(depth - 2):
+            layers.append(nn.Conv2d(num_features, num_features, kernel_size=3, padding=1, bias=False))
+            layers.append(nn.BatchNorm2d(num_features))
+            layers.append(nn.ReLU(inplace=True))
+            
+        # 最后一层: Conv (输出噪声)
+        layers.append(nn.Conv2d(num_features, in_channels, kernel_size=3, padding=1, bias=False))
+        
+        self.dncnn = nn.Sequential(*layers)
+        
+    def forward(self, x):
+        """
+        前向传播
+        Args:
+            x: 输入张量 [batch_size, in_channels, height, width]
+        Returns:
+            output: 去噪后的图像 [batch_size, in_channels, height, width]
+        """
+        noise = self.dncnn(x)
+        return x - noise
+
+
 def export_to_onnx(model, dummy_input, output_path):
     """
     导出模型到 ONNX 格式
@@ -168,6 +207,9 @@ if __name__ == "__main__":
     # 创建 ESPCN 版本
     model_espcn = TinyISPNetESPCN(in_channels=1, upscale_factor=2)
     
+    # 创建 DnCNN 版本
+    model_dncnn = DnCNN(in_channels=1, depth=17)
+    
     # 打印模型信息
     print("TinyISPNet (Bayer):")
     print(model_bayer)
@@ -175,6 +217,8 @@ if __name__ == "__main__":
     print(model_rggb)
     print("\nTinyISPNetESPCN:")
     print(model_espcn)
+    print("\nDnCNN:")
+    print(model_dncnn)
     
     # 测试前向传播
     dummy_input_bayer = torch.randn(1, 1, 64, 64)  # Bayer 输入
@@ -183,6 +227,7 @@ if __name__ == "__main__":
     output_bayer = model_bayer(dummy_input_bayer)
     output_rggb = model_rggb(dummy_input_rggb)
     output_espcn = model_espcn(dummy_input_bayer)
+    output_dncnn = model_dncnn(dummy_input_bayer)
     
     print(f"\n输入形状 (Bayer): {dummy_input_bayer.shape}")
     print(f"输出形状 (Bayer): {output_bayer.shape}")
@@ -190,6 +235,9 @@ if __name__ == "__main__":
     print(f"输出形状 (RGGB): {output_rggb.shape}")
     print(f"输入形状 (ESPCN): {dummy_input_bayer.shape}")
     print(f"输出形状 (ESPCN): {output_espcn.shape}")
+    print(f"输入形状 (DnCNN): {dummy_input_bayer.shape}")
+    print(f"输出形状 (DnCNN): {output_dncnn.shape}")
     
     # 导出 ONNX 示例
     # export_to_onnx(model_bayer, dummy_input_bayer, "tiny_isp_net_bayer.onnx")
+    # export_to_onnx(model_dncnn, dummy_input_bayer, "dncnn.onnx")
