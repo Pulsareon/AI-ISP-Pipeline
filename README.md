@@ -1,39 +1,32 @@
-# AI-ISP Pipeline
+# AI-ISP Pipeline (Performance Edition)
 
-An end-to-end Image Signal Processing (ISP) pipeline designed for AI-based computational photography.
+## 🎯 Hardware Targets
+- **Platform**: Qualcomm Snapdragon 8 Gen 2 / 8 Gen 3
+- **Resolution**: 4K (3840 x 2160)
+- **Latency**: < 800ms (End-to-End)
+- **Memory**: < 800MB Peak
 
-## 🚀 Features
+## ⚡ Optimization Strategies
 
-- **Frame Selection**: Laplacian Variance based sharpness scoring.
-- **Alignment**: ECC (Enhanced Correlation Coefficient) image alignment.
-- **Demosaicing**: Standard Bayer to RGB conversion.
-- **Denoising**: NLM (Non-local Means) with interface for Deep Learning models (DnCNN/UNet).
-- **Enhancement**: CLAHE (Contrast Limited Adaptive Histogram Equalization) and Texture Sharpening.
+### 1. Tiling Architecture (分块处理)
+To keep memory usage under 800MB, we process the 4K image in **512x512 tiles**.
+- **Memory Footprint**: ~10MB per tile (FP16) vs ~200MB full frame.
+- **L2 Cache Friendly**: Smaller tensors fit in NPU cache.
 
-## 📂 Project Structure
+### 2. INT8 Quantization (量化)
+Models must be quantized to INT8 for Snapdragon Hexagon NPU.
+- **Toolchain**: SNPE (Snapdragon Neural Processing Engine) / QNN SDK.
+- **Speedup**: 4x vs FP32.
 
-```
-AI-ISP/
-├── pipeline.py       # Core ISP logic
-├── models/           # (Placeholder) PyTorch/ONNX models
-├── raw_data/         # Input RAW images
-└── output/           # Processed results
-```
+### 3. Zero-Copy Pipeline
+- Use `AHardwareBuffer` on Android to share memory between Camera, GPU (OpenCL), and NPU without CPU copying.
 
-## 🛠️ Usage
+## 🧪 Benchmark (Python Simulation)
+
+Run `pipeline_lite.py` to simulate the logic flow and check CPU overhead.
 
 ```bash
-pip install opencv-python numpy
-python pipeline.py
+python pipeline_lite.py
 ```
 
-## 🤖 AI Integration
-
-To plug in your AI model (e.g., for Denoising):
-
-1. Modify `denoise()` in `pipeline.py`.
-2. Load your model: `model = torch.load('denoiser.pth')`.
-3. Inference: `clean_tensor = model(noisy_tensor)`.
-
-## 📜 License
-MIT
+*Note: Real performance requires C++ implementation on Android.*
