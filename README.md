@@ -1,5 +1,7 @@
 # AI-ISP Pipeline
 
+> **"我们这一代程序员就像是汇编变成C，从coder变成editer。"**
+
 An end-to-end Image Signal Processing (ISP) pipeline designed for AI-based computational photography.
 
 ## 🚀 Features
