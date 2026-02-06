@@ -49,7 +49,15 @@ python scripts/inference.py
 ```
 This runs the ISP pipeline on `input_bayer.png` (auto-generated) and saves `output.png`.
 
-### 4. Test Gallery (Real-world Validation)
+### 4. RAW Processing (MIPI RAW10)
+To handle real-world sensor data, we provide a RAW10 pack/unpack utility compliant with MIPI CSI-2 standards.
+
+```bash
+python scripts/raw_processing.py
+```
+This validates the bit-level manipulation logic required for interfacing with mobile sensors.
+
+### 5. Test Gallery (Real-world Validation)
 
 We have validated the TinyISPNet (Sharpening variant) on various scene types.
 Results are saved in `results/` as side-by-side comparisons (Original Left vs AI Output Right).
