@@ -1,32 +1,51 @@
-# AI-ISP Pipeline (Performance Edition)
+# AI-ISP Pipeline
 
-## 🎯 Hardware Targets
-- **Platform**: Qualcomm Snapdragon 8 Gen 2 / 8 Gen 3
-- **Resolution**: 4K (3840 x 2160)
-- **Latency**: < 800ms (End-to-End)
-- **Memory**: < 800MB Peak
+An end-to-end Image Signal Processing (ISP) pipeline designed for AI-based computational photography.
 
-## ⚡ Optimization Strategies
+## 🚀 Features
 
-### 1. Tiling Architecture (分块处理)
-To keep memory usage under 800MB, we process the 4K image in **512x512 tiles**.
-- **Memory Footprint**: ~10MB per tile (FP16) vs ~200MB full frame.
-- **L2 Cache Friendly**: Smaller tensors fit in NPU cache.
+- **Frame Selection**: Laplacian Variance based sharpness scoring.
+- **Alignment**: ECC (Enhanced Correlation Coefficient) image alignment.
+- **Demosaicing**: Standard Bayer to RGB conversion.
+- **Denoising**: NLM (Non-local Means) with interface for Deep Learning models (DnCNN/UNet).
+- **Enhancement**: CLAHE (Contrast Limited Adaptive Histogram Equalization) and Texture Sharpening.
 
-### 2. INT8 Quantization (量化)
-Models must be quantized to INT8 for Snapdragon Hexagon NPU.
-- **Toolchain**: SNPE (Snapdragon Neural Processing Engine) / QNN SDK.
-- **Speedup**: 4x vs FP32.
+## 📂 Project Structure
 
-### 3. Zero-Copy Pipeline
-- Use `AHardwareBuffer` on Android to share memory between Camera, GPU (OpenCL), and NPU without CPU copying.
-
-## 🧪 Benchmark (Python Simulation)
-
-Run `pipeline_lite.py` to simulate the logic flow and check CPU overhead.
-
-```bash
-python pipeline_lite.py
+```
+AI-ISP/
+├── pipeline.py       # Core ISP logic (Python Prototype)
+├── pipeline_lite.py  # High-Performance Tiling Logic
+├── simulate_raw.py   # Physical Sensor Simulator
+├── ncnn_src/         # C++ Implementation (ncnn + OpenCV)
+├── scripts/          # Deep Learning Workflow (PyTorch -> ONNX)
+│   ├── model.py      # TinyISPNet Definition
+│   ├── export.py     # ONNX Exporter
+│   └── inference.py  # ONNX Runtime Inference Engine
+└── requirements.txt
 ```
 
-*Note: Real performance requires C++ implementation on Android.*
+## 🛠️ Usage
+
+### 1. Python Simulation
+```bash
+pip install opencv-python numpy
+python pipeline.py
+```
+
+### 2. Deep Learning Demo (PyTorch -> ONNX)
+We provide a complete workflow to train, export, and run a TinyISPNet.
+
+**Export to ONNX:**
+```bash
+python scripts/export.py
+```
+
+**Run Inference:**
+```bash
+python scripts/inference.py
+```
+This runs the ISP pipeline on `input_bayer.png` (auto-generated) and saves `output.png`.
+
+## 📜 License
+MIT
