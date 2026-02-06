@@ -1,12 +1,6 @@
 /*
- * Pulsareon AI-ISP (ncnn Edition)
- * Target: Snapdragon 8 Gen 2 | 4K 60fps | <1050mA
- * 
- * Features:
- * - Zero-Copy Pipeline (simulated via pointer passing)
- * - Tiling Strategy (512x512) for Low Memory
- * - Vulkan Compute Acceleration
- * - INT8 Quantization Support
+ * Pulsareon AI-ISP (ncnn Edition) - Runnable Version
+ * Target: PC Simulation / Snapdragon Port
  */
 
 #include "net.h"
@@ -15,11 +9,12 @@
 #include <vector>
 #include <iostream>
 #include <chrono>
+#include <algorithm>
 
 // Configuration
 const int TILE_SIZE = 512;
 const int TILE_OVERLAP = 32;
-const int TARGET_LATENCY_MS = 16; // 60fps = 16.6ms
+const int TARGET_LATENCY_MS = 16; 
 
 class AI_ISP_Engine {
 private:
@@ -29,96 +24,102 @@ private:
 
 public:
     AI_ISP_Engine() {
-        // 1. Initialize Vulkan (Essential for Performance)
+        // 1. Initialize Vulkan
+#if NCNN_VULKAN
         int gpu_count = ncnn::get_gpu_count();
         if (gpu_count > 0) {
-            vkdev = ncnn::get_gpu_device(0); // Use primary GPU
+            vkdev = ncnn::get_gpu_device(0);
             opt.use_vulkan_compute = true;
             opt.use_fp16_packed = true;
             opt.use_fp16_storage = true;
-            opt.use_fp16_arithmetic = true;
-            opt.use_int8_inference = true; // Critical for Power/Perf
-            printf("⚡ ncnn Vulkan Initialized: FP16/INT8 Enabled\n");
-        } else {
-            printf("⚠️ No GPU detected! Fallback to CPU (Will be slow)\n");
+            printf("⚡ ncnn Vulkan Initialized\n");
         }
-
-        // 2. Load Model (Res-ESPCN-INT8)
-        // In real deployment, these would be .param and .bin files
-        // net.load_param("models/isp_int8.param");
-        // net.load_model("models/isp_int8.bin");
+#endif
+        opt.num_threads = 4;
         
-        // Optimize for Snapdragon (Little-Big cores)
-        opt.num_threads = 4; // Use efficient cores for power saving
+        // Load dummy model for compilation test
+        // In real usage: net.load_param("model.param");
     }
 
     ~AI_ISP_Engine() {
         net.clear();
     }
 
-    // Tiled Inference to keep Memory < 800MB
-    // [Vision Archon Crit]: Added Overlap to prevent boundary artifacts
     cv::Mat process_frame_tiled(const cv::Mat& raw_input) {
         int w = raw_input.cols;
         int h = raw_input.rows;
+        
+        // Output RGB
         cv::Mat output = cv::Mat::zeros(h, w, CV_8UC3);
-
-        // Pre-allocate ncnn Mat to avoid re-allocation
-        ncnn::Mat out_tile;
-
-        // [Power Archon Crit]: Dynamic threads based on thermal state (simulated)
-        opt.num_threads = 4; 
 
         for (int y = 0; y < h; y += (TILE_SIZE - TILE_OVERLAP * 2)) {
             for (int x = 0; x < w; x += (TILE_SIZE - TILE_OVERLAP * 2)) {
-                // 1. Crop Tile with Overlap
-                // [Performance Archon Crit]: On Android, use import_android_hardware_buffer for TRUE Zero-Copy
-                // ncnn::Mat in_tile = ncnn::Mat::from_android_hardware_buffer(...)
                 
-                int crop_x = std::max(0, x - TILE_OVERLAP);
-                int crop_y = std::max(0, y - TILE_OVERLAP);
+                // 1. Calculate safe crop coordinates
+                int x_start = std::max(0, x - TILE_OVERLAP);
+                int y_start = std::max(0, y - TILE_OVERLAP);
+                int x_end = std::min(w, x + TILE_SIZE - TILE_OVERLAP); // Correction for boundary
+                int y_end = std::min(h, y + TILE_SIZE - TILE_OVERLAP);
+                
+                // Adjust to ensure tile size fits
+                if (x_end - x_start > TILE_SIZE) x_end = x_start + TILE_SIZE;
+                if (y_end - y_start > TILE_SIZE) y_end = y_start + TILE_SIZE;
+
+                cv::Rect roi(x_start, y_start, x_end - x_start, y_end - y_start);
+                cv::Mat cv_tile = raw_input(roi).clone(); // Clone to ensure continuous memory
+
+                // 2. ncnn wrapping
+                ncnn::Mat in_tile = ncnn::Mat::from_pixels(
+                    cv_tile.data, ncnn::Mat::PIXEL_GRAY, roi.width, roi.height
+                );
 
                 // 3. Inference
                 ncnn::Extractor ex = net.create_extractor();
-                ex.set_vulkan_compute(opt.use_vulkan_compute);
-                ex.set_light_mode(true);
+                ex.set_opt(opt);
                 
-                ex.input("input", in_tile);
-                // Magic happens here: AI Denoise + Demosaic + Enhance
-                // ex.extract("output", out_tile); 
+                // Mock inference (Direct pass-through for compilation check)
+                // ex.input("in", in_tile);
+                // ncnn::Mat out_tile;
+                // ex.extract("out", out_tile);
                 
-                // For simulation, we just copy input to output (bypass)
-                // In real code: ncnn Mat -> cv::Mat
+                // Simulate output (Gray to RGB conversion simulation)
+                // In real code: out_tile.to_pixels(...)
+                cv::Mat processed_tile;
+                cv::cvtColor(cv_tile, processed_tile, cv::COLOR_GRAY2BGR);
+
+                // 4. Merge back (Handling Overlap)
+                // Calculate valid region (center of tile, excluding overlap)
+                int valid_x_start = (x == 0) ? 0 : TILE_OVERLAP;
+                int valid_y_start = (y == 0) ? 0 : TILE_OVERLAP;
+                int valid_x_end = (x_end == w) ? roi.width : roi.width - TILE_OVERLAP;
+                int valid_y_end = (y_end == h) ? roi.height : roi.height - TILE_OVERLAP;
                 
-                // 4. Merge back (Simulated)
-                // output(roi) = ...
+                cv::Rect valid_roi_local(valid_x_start, valid_y_start, valid_x_end - valid_x_start, valid_y_end - valid_y_start);
+                cv::Rect valid_roi_global(x_start + valid_x_start, y_start + valid_y_start, valid_roi_local.width, valid_roi_local.height);
+                
+                // Ensure bounds are safe
+                valid_roi_global &= cv::Rect(0, 0, w, h);
+                valid_roi_local.width = valid_roi_global.width;
+                valid_roi_local.height = valid_roi_global.height;
+
+                if (valid_roi_global.area() > 0) {
+                    processed_tile(valid_roi_local).copyTo(output(valid_roi_global));
+                }
             }
         }
         return output;
     }
 
     void benchmark() {
-        printf("🚀 Starting 4K 60fps Benchmark...\n");
-        
-        // Mock 4K Input (NV12 or RAW10 simulation)
-        cv::Mat input(2160, 3840, CV_8UC1); 
+        printf("🚀 Starting Benchmark (Simulated)...\n");
+        cv::Mat input = cv::Mat::zeros(2160, 3840, CV_8UC1);
         
         auto start = std::chrono::high_resolution_clock::now();
-        
-        // Process
         process_frame_tiled(input);
-        
         auto end = std::chrono::high_resolution_clock::now();
+        
         double ms = std::chrono::duration<double, std::milli>(end - start).count();
-        
-        printf("⏱️ Total Time: %.2f ms\n", ms);
-        printf("💾 Peak Memory: ~20 MB (Tiled)\n");
-        
-        if (ms <= TARGET_LATENCY_MS) {
-            printf("✅ PASS: Real-time Requirement Met\n");
-        } else {
-            printf("❌ FAIL: Too Slow (Need DSP/HTP acceleration)\n");
-        }
+        printf("⏱️ Time: %.2f ms\n", ms);
     }
 };
 
